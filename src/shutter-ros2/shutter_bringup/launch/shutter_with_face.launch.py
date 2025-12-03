@@ -64,44 +64,44 @@ def generate_launch_description():
         default_value='true',
         description='Whether to move to shutter screen'
     )
-
+    
     # Music and oscillator arguments
     use_music_arg = DeclareLaunchArgument(
         'use_music',
         default_value='false',
         description='Enable music-driven motion'
     )
-
+    
     music_file_arg = DeclareLaunchArgument(
         'music_file',
         default_value='/home/user/song.wav',
         description='Path to music file for music-driven motion'
     )
-
+    
     k_tempo_arg = DeclareLaunchArgument(
         'k_tempo',
         default_value='0.1',
         description='Tempo sensitivity constant for oscillator'
     )
-
+    
     k_energy_arg = DeclareLaunchArgument(
         'k_energy',
         default_value='0.5',
         description='Energy sensitivity constant for oscillator'
     )
-
+    
     base_amplitude_arg = DeclareLaunchArgument(
         'base_amplitude',
         default_value='0.5',
         description='Base amplitude A_0 for oscillator'
     )
-
+    
     control_rate_arg = DeclareLaunchArgument(
         'control_rate',
         default_value='50.0',
         description='Control loop frequency in Hz'
     )
-
+    
     enable_beat_sync_arg = DeclareLaunchArgument(
         'enable_beat_sync',
         default_value='true',
@@ -150,10 +150,33 @@ def generate_launch_description():
         }.items()
     )
 
-    motor_start_node = Node(
-        package='shutter_bringup',
-        executable='motor_startup_publisher.py',
-        output='screen'
+    # Music analyzer node (only if use_music is true)
+    music_analyzer_node = Node(
+        package='shutter_music_analyzer',
+        executable='music_analyzer',
+        name='music_beat_analyzer',
+        output='screen',
+        parameters=[{
+            'music_file': LaunchConfiguration('music_file'),
+            'publish_interval': 0.1,
+        }],
+        condition=IfCondition(LaunchConfiguration('use_music'))
+    )
+    
+    # Oscillator control node (music-driven motion for all 4 joints)
+    oscillator_node = Node(
+        package='shutter_music_analyzer',
+        executable='oscillator_control',
+        name='oscillator_control',
+        output='screen',
+        parameters=[{
+            'k_tempo': LaunchConfiguration('k_tempo'),
+            'k_energy': LaunchConfiguration('k_energy'),
+            'base_amplitude': LaunchConfiguration('base_amplitude'),
+            'control_rate': LaunchConfiguration('control_rate'),
+            'enable_beat_sync': LaunchConfiguration('enable_beat_sync'),
+            'use_phase_offsets': 'true',  # Use phase offsets for coordinated motion
+        }]
     )
 
     return LaunchDescription([
@@ -166,9 +189,15 @@ def generate_launch_description():
         blink_arg,
         limit_pupils_arg,
         move_to_shutter_screen_arg,
+        use_music_arg,
+        music_file_arg,
+        k_tempo_arg,
+        k_energy_arg,
+        base_amplitude_arg,
+        control_rate_arg,
+        enable_beat_sync_arg,
         shutter_launch,
         face_launch,
-        motor_start_node, 
+        music_analyzer_node,
+        oscillator_node,
     ])
-    
-
