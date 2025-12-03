@@ -87,6 +87,10 @@ class OscillatorControlNode(Node):
         self.beat_times = []
         self.last_beat_time = None
         
+        # Change tracking for logging
+        self.last_logged_amplitude = None
+        self.last_logged_frequency = None
+        
         # Time tracking: measure actual elapsed time for accurate motion
         # node_start_time: when this node started (for absolute time reference)
         # last_update_time: when control_loop last ran (for calculating dt)
@@ -180,10 +184,15 @@ class OscillatorControlNode(Node):
         self.current_tempo = tempo_bpm
         
         # Update ALL oscillators with the new tempo
+        old_frequency = self.oscillators[0].omega
         for osc in self.oscillators:
             osc.update_from_tempo(tempo_bpm)
+        new_frequency = self.oscillators[0].omega
         
-        self.get_logger().debug(f'Updated tempo: {tempo_bpm:.1f} BPM → ω = {self.oscillators[0].omega:.3f} rad/s')
+        # Log frequency changes
+        if self.last_logged_frequency is None or abs(new_frequency - self.last_logged_frequency) >= 0.1:
+            self.get_logger().info(f'[FREQUENCY] tempo={tempo_bpm:.1f} BPM → ω={old_frequency:.3f} → {new_frequency:.3f} rad/s (Δ{new_frequency - old_frequency:+.3f})')
+            self.last_logged_frequency = new_frequency
     
     def energy_callback(self, msg):
         """Called automatically when music/current_energy topic publishes a new energy value"""
@@ -197,10 +206,15 @@ class OscillatorControlNode(Node):
         self.current_energy = energy
         
         # Update ALL oscillators with the new energy
+        old_amplitude = self.oscillators[0].A
         for osc in self.oscillators:
             osc.update_from_energy(energy)
+        new_amplitude = self.oscillators[0].A
         
-        self.get_logger().debug(f'Updated energy: {energy:.3f} → A = {self.oscillators[0].A:.3f}')
+        # Log amplitude changes
+        if self.last_logged_amplitude is None or abs(new_amplitude - self.last_logged_amplitude) >= 0.05:
+            self.get_logger().info(f'[AMPLITUDE] energy={energy:.3f} → A={old_amplitude:.3f} → {new_amplitude:.3f} rad (Δ{new_amplitude - old_amplitude:+.3f})')
+            self.last_logged_amplitude = new_amplitude
     
     def beat_times_callback(self, msg):
         """Called automatically when music/beat_times topic publishes upcoming beat times"""

@@ -86,7 +86,7 @@ def generate_launch_description():
     
     k_energy_arg = DeclareLaunchArgument(
         'k_energy',
-        default_value='0.5',
+        default_value='1.0',  # Increased from 0.5 for more dramatic amplitude changes
         description='Energy sensitivity constant for oscillator'
     )
     
@@ -106,6 +106,12 @@ def generate_launch_description():
         'enable_beat_sync',
         default_value='true',
         description='Enable phase synchronization to beats'
+    )
+    
+    play_audio_arg = DeclareLaunchArgument(
+        'play_audio',
+        default_value='true',
+        description='Play audio out loud when music analyzer is running'
     )
 
     # Determine screen version based on robot version
@@ -159,6 +165,7 @@ def generate_launch_description():
         parameters=[{
             'music_file': LaunchConfiguration('music_file'),
             'publish_interval': 0.1,
+            'play_audio': LaunchConfiguration('play_audio'),
         }],
         condition=IfCondition(LaunchConfiguration('use_music'))
     )
@@ -197,6 +204,7 @@ def generate_launch_description():
         base_amplitude_arg,
         control_rate_arg,
         enable_beat_sync_arg,
+        play_audio_arg,
         shutter_launch,
         face_launch,
         music_analyzer_node,

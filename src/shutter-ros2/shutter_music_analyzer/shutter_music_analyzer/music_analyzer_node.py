@@ -16,6 +16,13 @@ import os
 import time
 from std_msgs.msg import Float32MultiArray, Float32
 
+# Optional audio playback
+try:
+    import pygame
+    PYGAME_AVAILABLE = True
+except ImportError:
+    PYGAME_AVAILABLE = False
+
 
 class MusicBeatAnalyzerNode(Node):
     def __init__(self):
@@ -26,11 +33,13 @@ class MusicBeatAnalyzerNode(Node):
         self.declare_parameter('publish_interval', 0.1)  # seconds
         self.declare_parameter('playback_start_time', 0.0)  # offset for synchronization
         self.declare_parameter('tempo_bpm', 0.0)  # 0 = auto-detect, otherwise use this value
+        self.declare_parameter('play_audio', True)  # Play audio out loud
 
         music_file = self.get_parameter('music_file').value
         self.publish_interval = self.get_parameter('publish_interval').value
         self.playback_start_time = self.get_parameter('playback_start_time').value
         self.tempo_bpm = self.get_parameter('tempo_bpm').value
+        self.play_audio = self.get_parameter('play_audio').value
 
         # Publishers
         self.beat_times_pub = self.create_publisher(Float32MultiArray, 'music/beat_times', 10)
@@ -50,12 +59,36 @@ class MusicBeatAnalyzerNode(Node):
         # Playback tracking
         self.node_start_time = None
         self.is_playing = False
+        self.audio_player = None
+        
+        # Change tracking for logging
+        self.last_energy = None
+        self.energy_change_threshold = 0.05  # Log when energy changes by this much
+        
+        # Initialize audio playback if requested
+        if self.play_audio:
+            if PYGAME_AVAILABLE:
+                try:
+                    pygame.mixer.init()
+                    self.get_logger().info('Audio playback enabled (pygame)')
+                except Exception as e:
+                    self.get_logger().warn(f'Failed to initialize audio playback: {e}')
+                    self.play_audio = False
+            else:
+                self.get_logger().warn('pygame not available - install with: pip install pygame')
+                self.get_logger().warn('Audio playback disabled')
+                self.play_audio = False
 
         # Load and analyze music upfront
         if self.analyze_song(music_file):
             self.get_logger().info('Music beat analyzer node started')
             self.node_start_time = time.time()
             self.is_playing = True
+            
+            # Start audio playback if enabled
+            if self.play_audio and PYGAME_AVAILABLE:
+                self.start_audio_playback(music_file)
+            
             self.timer = self.create_timer(self.publish_interval, self.timer_callback)
         else:
             self.get_logger().error('Failed to analyze song. Node will not publish updates.')
@@ -88,6 +121,17 @@ class MusicBeatAnalyzerNode(Node):
 
             if np.max(energy) > 0:
                 energy = energy / np.max(energy)
+            
+            # Scale energy to use wider range (0.0 to 1.0) for more noticeable changes
+            # If your energy is currently 0.07-0.15, this will map it to ~0.0-1.0
+            energy_min = np.min(energy)
+            energy_max = np.max(energy)
+            if energy_max > energy_min:
+                energy = (energy - energy_min) / (energy_max - energy_min)  # Normalize to 0-1
+            else:
+                energy = np.zeros_like(energy)  # All same value, set to 0
+            
+            self.get_logger().info(f'Energy range: {energy_min:.3f} - {energy_max:.3f} (scaled to 0.0 - 1.0)')
 
             self.energy = energy
             self.energy_times = times
@@ -268,18 +312,30 @@ class MusicBeatAnalyzerNode(Node):
         if current_time >= self.audio_duration:
             self.get_logger().info('Reached end of audio file')
             self.is_playing = False
+            self.stop_audio_playback()
             return
 
         # Publish tempo (constant, but republish periodically)
         tempo_msg = Float32()
         tempo_msg.data = self.tempo
         self.tempo_pub.publish(tempo_msg)
+        
+        # Log initial tempo
+        if self.last_energy is None:  # First call
+            self.get_logger().info(f'[TEMPO] {self.tempo:.1f} BPM')
 
         # Publish current energy value (interpolated from energy array)
         current_energy = self.get_energy_at_time(current_time)
         energy_msg = Float32()
         energy_msg.data = current_energy
         self.current_energy_pub.publish(energy_msg)
+        
+        # Log energy changes
+        if self.last_energy is not None:
+            energy_delta = abs(current_energy - self.last_energy)
+            if energy_delta >= self.energy_change_threshold:
+                self.get_logger().info(f'[ENERGY] t={current_time:.2f}s: {self.last_energy:.3f} → {current_energy:.3f} (Δ{current_energy - self.last_energy:+.3f})')
+        self.last_energy = current_energy
 
         # Optionally publish upcoming beats/onsets in a window
         upcoming_beats = self.get_upcoming_beats(current_time, window=2.0)
@@ -316,6 +372,28 @@ class MusicBeatAnalyzerNode(Node):
 
         mask = (self.beat_times >= current_time) & (self.beat_times <= current_time + window)
         return self.beat_times[mask]
+    
+    def start_audio_playback(self, music_file):
+        """Start playing audio file using pygame"""
+        if not PYGAME_AVAILABLE or not self.play_audio:
+            return
+        
+        try:
+            pygame.mixer.music.load(music_file)
+            pygame.mixer.music.play()
+            self.get_logger().info(f'Started playing audio: {music_file}')
+        except Exception as e:
+            self.get_logger().error(f'Failed to play audio: {e}')
+            self.play_audio = False
+    
+    def stop_audio_playback(self):
+        """Stop audio playback"""
+        if PYGAME_AVAILABLE and self.play_audio:
+            try:
+                pygame.mixer.music.stop()
+                self.get_logger().info('Stopped audio playback')
+            except Exception as e:
+                self.get_logger().warn(f'Error stopping audio: {e}')
 
 
 def main(args=None):
@@ -327,6 +405,7 @@ def main(args=None):
     except KeyboardInterrupt:
         pass
     finally:
+        node.stop_audio_playback()
         node.destroy_node()
         rclpy.shutdown()
 
