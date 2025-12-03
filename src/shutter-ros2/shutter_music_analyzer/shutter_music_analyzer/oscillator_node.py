@@ -63,14 +63,14 @@ class OscillatorControlNode(Node):
         self.pattern1_energy = 0.3            # Low energy
         
         # Pattern 2: Faster tempo
-        self.pattern2_tempo_bpm = 180.0       # Faster tempo
+        self.pattern2_tempo_bpm = 200.0       # Faster tempo
         self.pattern2_energy = 0.7            # Low energy (same)
         
         # Pattern 3: Medium tempo
         self.pattern3_tempo_bpm = 90.0        # Medium tempo
-        self.pattern3_energy = 0.3           # Low energy (same)
+        self.pattern3_energy = 1.0           # Low energy (same)
         
-        self.pattern_change_interval = 4.0    # Change pattern every 4 seconds
+        self.pattern_change_interval = 2.5    # Change pattern every 4 seconds
         
         # Determine mode based on use_music parameter
         use_music = self.get_parameter('use_music').value
