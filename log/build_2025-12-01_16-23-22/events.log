@@ -1,0 +1,7 @@
+[0.000000] (-) TimerEvent: {}
+[0.000092] (-) JobUnselected: {'identifier': 'ros_tcp_endpoint'}
+[0.000117] (-) JobUnselected: {'identifier': 'shutter_bringup'}
+[0.000133] (-) JobUnselected: {'identifier': 'shutter_description'}
+[0.000161] (-) JobUnselected: {'identifier': 'shutter_face_ros'}
+[0.000172] (-) JobUnselected: {'identifier': 'shutter_hardware_interface'}
+[0.000183] (-) EventReactorShutdown: {}
