@@ -62,17 +62,17 @@ class OscillatorControlNode(Node):
         self.pattern1_energy = 0.3            # Low energy
         
         # Pattern 2: Faster tempo
-        self.pattern2_tempo_bpm = 120.0       # Faster tempo
-        self.pattern2_energy = 0.3            # Low energy (same)
+        self.pattern2_tempo_bpm = 180.0       # Faster tempo
+        self.pattern2_energy = 0.7            # Low energy (same)
         
         # Pattern 3: Medium tempo
         self.pattern3_tempo_bpm = 90.0        # Medium tempo
-        self.pattern3_energy = 0.3            # Low energy (same)
+        self.pattern3_energy = 0.3           # Low energy (same)
         
         self.pattern_change_interval = 4.0    # Change pattern every 4 seconds
         self.use_hardcoded_patterns = True    # Set to False to use music topics instead
         self.last_pattern_change_time = None
-        self.current_pattern = 1
+        self.current_pattern = 2
         # ============================================
         
         # Current musical features (shared across all oscillators)

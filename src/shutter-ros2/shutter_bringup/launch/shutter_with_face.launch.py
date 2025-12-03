@@ -175,7 +175,7 @@ def generate_launch_description():
             'base_amplitude': LaunchConfiguration('base_amplitude'),
             'control_rate': LaunchConfiguration('control_rate'),
             'enable_beat_sync': LaunchConfiguration('enable_beat_sync'),
-            'use_phase_offsets': 'true',  # Use phase offsets for coordinated motion
+            'use_phase_offsets': True,  # Use phase offsets for coordinated motion
         }]
     )
 
