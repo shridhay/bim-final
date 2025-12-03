@@ -54,8 +54,29 @@ class OscillatorControlNode(Node):
             )
             self.oscillators.append(osc)
         
+        # ============================================
+        # HARDCODED TEMPO PATTERNS (cycles every 4 seconds)
+        # ============================================
+        # Pattern 1: Slow tempo
+        self.pattern1_tempo_bpm = 60.0        # Slow tempo
+        self.pattern1_energy = 0.3            # Low energy
+        
+        # Pattern 2: Faster tempo
+        self.pattern2_tempo_bpm = 120.0       # Faster tempo
+        self.pattern2_energy = 0.3            # Low energy (same)
+        
+        # Pattern 3: Medium tempo
+        self.pattern3_tempo_bpm = 90.0        # Medium tempo
+        self.pattern3_energy = 0.3            # Low energy (same)
+        
+        self.pattern_change_interval = 4.0    # Change pattern every 4 seconds
+        self.use_hardcoded_patterns = True    # Set to False to use music topics instead
+        self.last_pattern_change_time = None
+        self.current_pattern = 1
+        # ============================================
+        
         # Current musical features (shared across all oscillators)
-        # These get updated when music topics publish new values
+        # These get updated when music topics publish new values OR hardcoded patterns
         self.current_tempo = None
         self.current_energy = None
         self.beat_times = []
@@ -66,6 +87,7 @@ class OscillatorControlNode(Node):
         # last_update_time: when control_loop last ran (for calculating dt)
         self.node_start_time = time.time()
         self.last_update_time = None
+        self.last_pattern_change_time = self.node_start_time
         
         # Subscribers: listen to music analysis topics
         # These callbacks update oscillator parameters (frequency, amplitude) when music changes
@@ -103,13 +125,46 @@ class OscillatorControlNode(Node):
         control_rate = self.get_parameter('control_rate').value
         self.timer = self.create_timer(1.0 / control_rate, self.control_loop)
         
+        # Apply initial hardcoded pattern if enabled
+        if self.use_hardcoded_patterns:
+            self._apply_pattern(1)
+            self.get_logger().info(f'Using hardcoded tempo patterns (cycling every {self.pattern_change_interval}s)')
+            self.get_logger().info(f'  Pattern 1: tempo={self.pattern1_tempo_bpm} BPM, energy={self.pattern1_energy}')
+            self.get_logger().info(f'  Pattern 2: tempo={self.pattern2_tempo_bpm} BPM, energy={self.pattern2_energy}')
+            self.get_logger().info(f'  Pattern 3: tempo={self.pattern3_tempo_bpm} BPM, energy={self.pattern3_energy}')
+        
         self.get_logger().info(f'Oscillator control node started (4-joint control)')
         self.get_logger().info(f'  k_tempo: {k_tempo}, k_energy: {k_energy}, base_amplitude: {base_amp}')
         self.get_logger().info(f'  Phase offsets: {phase_offsets}')
         self.get_logger().info(f'  Control rate: {control_rate} Hz')
     
+    def _apply_pattern(self, pattern_num):
+        """Apply a hardcoded pattern (1, 2, or 3)"""
+        if pattern_num == 1:
+            tempo_bpm = self.pattern1_tempo_bpm
+            energy = self.pattern1_energy
+        elif pattern_num == 2:
+            tempo_bpm = self.pattern2_tempo_bpm
+            energy = self.pattern2_energy
+        else:  # pattern 3
+            tempo_bpm = self.pattern3_tempo_bpm
+            energy = self.pattern3_energy
+        
+        # Update all oscillators
+        for osc in self.oscillators:
+            osc.update_from_tempo(tempo_bpm)
+            osc.update_from_energy(energy)
+        
+        self.current_tempo = tempo_bpm
+        self.current_energy = energy
+        self.get_logger().info(f'Applied Pattern {pattern_num}: tempo={tempo_bpm} BPM, energy={energy}')
+    
     def tempo_callback(self, msg):
         """Called automatically when music/tempo topic publishes a new tempo value"""
+        # Only update if not using hardcoded patterns
+        if self.use_hardcoded_patterns:
+            return
+        
         # This updates the oscillator frequency (how fast they oscillate)
         # Higher tempo = faster oscillation
         tempo_bpm = msg.data
@@ -123,6 +178,10 @@ class OscillatorControlNode(Node):
     
     def energy_callback(self, msg):
         """Called automatically when music/current_energy topic publishes a new energy value"""
+        # Only update if not using hardcoded patterns
+        if self.use_hardcoded_patterns:
+            return
+        
         # This updates the oscillator amplitude (how far they move)
         # Higher energy = larger movement range
         energy = msg.data
@@ -161,6 +220,16 @@ class OscillatorControlNode(Node):
         # Calculate how much time has passed since last loop iteration
         # dt = actual elapsed time (handles timer jitter better than fixed increments)
         current_time = time.time() - self.node_start_time
+        
+        # Check if it's time to change hardcoded pattern
+        if self.use_hardcoded_patterns:
+            elapsed_since_pattern_change = time.time() - self.last_pattern_change_time
+            
+            if elapsed_since_pattern_change >= self.pattern_change_interval:
+                # Time to change pattern
+                self.current_pattern = (self.current_pattern % 3) + 1  # Cycle 1->2->3->1
+                self.last_pattern_change_time = time.time()
+                self._apply_pattern(self.current_pattern)
         
         if self.last_update_time is None:
             # First call: use expected time step
