@@ -30,6 +30,7 @@ class OscillatorControlNode(Node):
         self.declare_parameter('enable_beat_sync', True)  # Sync phase to beats
         self.declare_parameter('use_phase_offsets', True)  # Use phase offsets for coordinated motion
         self.declare_parameter('use_music', False)  # If True, use music topics; if False, use hardcoded patterns
+        self.declare_parameter('tempo_set', 1)  # Which tempo set to use (1, 2, or 3)
         
         k_tempo = self.get_parameter('k_tempo').value
         k_energy = self.get_parameter('k_energy').value
@@ -56,21 +57,49 @@ class OscillatorControlNode(Node):
             self.oscillators.append(osc)
         
         # ============================================
-        # HARDCODED TEMPO PATTERNS (cycles every 4 seconds)
+        # HARDCODED TEMPO SETS (3 sets, each with 3 patterns)
         # ============================================
-        # Pattern 1: Slow tempo
-        self.pattern1_tempo_bpm = 60.0        # Slow tempo
-        self.pattern1_energy = 0.3            # Low energy
+        tempo_set = self.get_parameter('tempo_set').value
         
-        # Pattern 2: Faster tempo
-        self.pattern2_tempo_bpm = 200.0       # Faster tempo
-        self.pattern2_energy = 0.7            # Low energy (same)
+        # Set 1: Slow to Medium range
+        tempo_set_1 = {
+            'pattern1': {'tempo': 60.0, 'energy': 0.3},
+            'pattern2': {'tempo': 90.0, 'energy': 0.5},
+            'pattern3': {'tempo': 120.0, 'energy': 0.7}
+        }
         
-        # Pattern 3: Medium tempo
-        self.pattern3_tempo_bpm = 90.0        # Medium tempo
-        self.pattern3_energy = 1.0           # Low energy (same)
+        # Set 2: Medium to Fast range
+        tempo_set_2 = {
+            'pattern1': {'tempo': 100.0, 'energy': 0.4},
+            'pattern2': {'tempo': 150.0, 'energy': 0.7},
+            'pattern3': {'tempo': 200.0, 'energy': 1.0}
+        }
         
-        self.pattern_change_interval = 2.5    # Change pattern every 4 seconds
+        # Set 3: Very Slow to Very Fast (wide range)
+        tempo_set_3 = {
+            'pattern1': {'tempo': 40.0, 'energy': 0.2},
+            'pattern2': {'tempo': 120.0, 'energy': 0.6},
+            'pattern3': {'tempo': 220.0, 'energy': 1.0}
+        }
+        
+        # Select which set to use
+        tempo_sets = {1: tempo_set_1, 2: tempo_set_2, 3: tempo_set_3}
+        if tempo_set not in tempo_sets:
+            self.get_logger().warn(f'Invalid tempo_set={tempo_set}, using set 1')
+            tempo_set = 1
+        
+        selected_set = tempo_sets[tempo_set]
+        
+        # Extract patterns from selected set
+        self.pattern1_tempo_bpm = selected_set['pattern1']['tempo']
+        self.pattern1_energy = selected_set['pattern1']['energy']
+        self.pattern2_tempo_bpm = selected_set['pattern2']['tempo']
+        self.pattern2_energy = selected_set['pattern2']['energy']
+        self.pattern3_tempo_bpm = selected_set['pattern3']['tempo']
+        self.pattern3_energy = selected_set['pattern3']['energy']
+        
+        self.pattern_change_interval = 2.5    # Change pattern every 2.5 seconds
+        self.selected_tempo_set = tempo_set
         
         # Determine mode based on use_music parameter
         use_music = self.get_parameter('use_music').value
@@ -138,7 +167,7 @@ class OscillatorControlNode(Node):
         if self.use_hardcoded_patterns:
             self._apply_pattern(1)
             self.get_logger().info(f'*** MODE: Hardcoded patterns (use_music=False) ***')
-            self.get_logger().info(f'Using hardcoded tempo patterns (cycling every {self.pattern_change_interval}s)')
+            self.get_logger().info(f'Using Tempo Set {self.selected_tempo_set} (cycling every {self.pattern_change_interval}s)')
             self.get_logger().info(f'  Pattern 1: tempo={self.pattern1_tempo_bpm} BPM, energy={self.pattern1_energy}')
             self.get_logger().info(f'  Pattern 2: tempo={self.pattern2_tempo_bpm} BPM, energy={self.pattern2_energy}')
             self.get_logger().info(f'  Pattern 3: tempo={self.pattern3_tempo_bpm} BPM, energy={self.pattern3_energy}')

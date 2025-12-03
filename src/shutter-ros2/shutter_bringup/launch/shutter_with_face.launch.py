@@ -113,6 +113,12 @@ def generate_launch_description():
         default_value='true',
         description='Play audio out loud when music analyzer is running'
     )
+    
+    tempo_set_arg = DeclareLaunchArgument(
+        'tempo_set',
+        default_value='1',
+        description='Which tempo set to use when use_music=false: 1=Slow-Medium, 2=Medium-Fast, 3=Very Slow-Very Fast'
+    )
 
     # Determine screen version based on robot version
     screen_version = PythonExpression([
@@ -184,6 +190,7 @@ def generate_launch_description():
             'enable_beat_sync': LaunchConfiguration('enable_beat_sync'),
             'use_phase_offsets': True,  # Use phase offsets for coordinated motion
             'use_music': LaunchConfiguration('use_music'),  # Determines if oscillator uses music topics or hardcoded patterns
+            'tempo_set': LaunchConfiguration('tempo_set'),  # Which tempo set to use (1, 2, or 3)
         }]
     )
 
@@ -205,6 +212,7 @@ def generate_launch_description():
         control_rate_arg,
         enable_beat_sync_arg,
         play_audio_arg,
+        tempo_set_arg,
         shutter_launch,
         face_launch,
         music_analyzer_node,
