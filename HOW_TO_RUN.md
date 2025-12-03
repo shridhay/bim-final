@@ -4,7 +4,7 @@
 
 1. **Build the workspace** (if you haven't already):
    ```bash
-   cd ~/CPSC459/Final-Project/ros2_ws
+   cd ~/CPSC459/bim-final
    colcon build --packages-select shutter_music_analyzer
    source install/setup.bash
    ```
@@ -16,7 +16,7 @@
 Run the complete Shutter robot with face animation and music-driven motion:
 
 ```bash
-cd ~/CPSC459/Final-Project/ros2_ws
+cd ~/CPSC459/bim-final
 source install/setup.bash
 
 ros2 launch shutter_bringup shutter_with_face.launch.py \
@@ -50,7 +50,7 @@ ros2 launch shutter_bringup shutter_with_face.launch.py \
 If you just want to test the music analysis and oscillator without the full robot:
 
 ```bash
-cd ~/CPSC459/Final-Project/ros2_ws
+cd ~/CPSC459/bim-final
 source install/setup.bash
 
 ros2 launch shutter_music_analyzer music_oscillator.launch.py \
@@ -82,7 +82,7 @@ The oscillator will still run but won't respond to music features (uses default 
 
 In a new terminal:
 ```bash
-source ~/CPSC459/Final-Project/ros2_ws/install/setup.bash
+source ~/CPSC459/bim-final/install/setup.bash
 
 # See all music topics
 ros2 topic list | grep music
@@ -132,6 +132,45 @@ The nodes output to screen by default. You should see:
 - Check music analyzer logs for errors
 - Verify `/music/tempo` topic is publishing
 
+### Dynamixel Communication Errors ("TxRxResult Incorrect status packet", "can't find dynamixel ID")
+This error indicates the hardware interface can't communicate with the Dynamixel motors:
+
+1. **Check USB device connection:**
+   ```bash
+   # List available USB serial devices
+   ls -la /dev/ttyUSB* /dev/ttyACM* 2>/dev/null
+   
+   # If no devices found, check if motors are:
+   # - Powered on (check power LED)
+   # - USB cable connected
+   # - USB permissions set (may need to add user to dialout group)
+   ```
+
+2. **Specify correct USB port:**
+   ```bash
+   # If your device is /dev/ttyACM0 instead of /dev/ttyUSB0:
+   ros2 launch shutter_bringup shutter_with_face.launch.py \
+       use_music:=false \
+       driver_device:=ttyACM0
+   ```
+
+3. **Check baud rate:**
+   - Default is 4000000 (4Mbps)
+   - Motors must be configured to match this baud rate
+   - Use Dynamixel Wizard to verify/change baud rate
+
+4. **Verify motor IDs:**
+   - Check `shutter_hardware_interface/config/dynamixel_joints_position.yaml`
+   - Motors should have IDs: 1, 2, 3, 4
+   - Use Dynamixel Wizard to scan and verify motor IDs
+
+5. **Run in simulation mode (if hardware unavailable):**
+   ```bash
+   ros2 launch shutter_bringup shutter_with_face.launch.py \
+       simulation:=true \
+       use_music:=false
+   ```
+
 ## Example Music File Paths
 
 ```bash
@@ -139,7 +178,7 @@ The nodes output to screen by default. You should see:
 music_file:=~/Music/song.wav
 
 # If your music is in the project directory
-music_file:=~/CPSC459/Final-Project/music/song.wav
+music_file:=~/CPSC459/bim-final/music/song.wav
 
 # Absolute path
 music_file:=/Users/skylar/Music/song.wav
