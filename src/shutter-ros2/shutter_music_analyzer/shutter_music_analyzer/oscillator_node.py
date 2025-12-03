@@ -29,6 +29,7 @@ class OscillatorControlNode(Node):
         self.declare_parameter('control_rate', 50.0)  # Hz
         self.declare_parameter('enable_beat_sync', True)  # Sync phase to beats
         self.declare_parameter('use_phase_offsets', True)  # Use phase offsets for coordinated motion
+        self.declare_parameter('use_music', False)  # If True, use music topics; if False, use hardcoded patterns
         
         k_tempo = self.get_parameter('k_tempo').value
         k_energy = self.get_parameter('k_energy').value
@@ -70,9 +71,13 @@ class OscillatorControlNode(Node):
         self.pattern3_energy = 0.3           # Low energy (same)
         
         self.pattern_change_interval = 4.0    # Change pattern every 4 seconds
-        self.use_hardcoded_patterns = True    # Set to False to use music topics instead
+        
+        # Determine mode based on use_music parameter
+        use_music = self.get_parameter('use_music').value
+        self.use_hardcoded_patterns = not use_music  # If use_music=False, use hardcoded patterns
+        
         self.last_pattern_change_time = None
-        self.current_pattern = 2
+        self.current_pattern = 1  # Start with pattern 1
         # ============================================
         
         # Current musical features (shared across all oscillators)
@@ -128,10 +133,14 @@ class OscillatorControlNode(Node):
         # Apply initial hardcoded pattern if enabled
         if self.use_hardcoded_patterns:
             self._apply_pattern(1)
+            self.get_logger().info(f'*** MODE: Hardcoded patterns (use_music=False) ***')
             self.get_logger().info(f'Using hardcoded tempo patterns (cycling every {self.pattern_change_interval}s)')
             self.get_logger().info(f'  Pattern 1: tempo={self.pattern1_tempo_bpm} BPM, energy={self.pattern1_energy}')
             self.get_logger().info(f'  Pattern 2: tempo={self.pattern2_tempo_bpm} BPM, energy={self.pattern2_energy}')
             self.get_logger().info(f'  Pattern 3: tempo={self.pattern3_tempo_bpm} BPM, energy={self.pattern3_energy}')
+        else:
+            self.get_logger().info(f'*** MODE: Music-driven (use_music=True) ***')
+            self.get_logger().info(f'Waiting for music topics: /music/tempo and /music/current_energy')
         
         self.get_logger().info(f'Oscillator control node started (4-joint control)')
         self.get_logger().info(f'  k_tempo: {k_tempo}, k_energy: {k_energy}, base_amplitude: {base_amp}')
