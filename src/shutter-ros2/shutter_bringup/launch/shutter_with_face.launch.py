@@ -120,6 +120,12 @@ def generate_launch_description():
         description='Which tempo set to use when use_music=false: 1=Slow-Medium, 2=Medium-Fast, 3=Very Slow-Very Fast'
     )
 
+    playback_offset_arg = DeclareLaunchArgument(
+        'playback_offset',
+        default_value='-0.1', # negative value delays
+        description='Offset in seconds to align audio with robot (negative delays robot)'
+    )
+
     # Determine screen version based on robot version
     screen_version = PythonExpression([
         '"v2" if float("', LaunchConfiguration('robot_version'), '") >= 4.0 else "v1"'
@@ -172,6 +178,7 @@ def generate_launch_description():
             'music_file': LaunchConfiguration('music_file'),
             'publish_interval': 0.1,
             'play_audio': LaunchConfiguration('play_audio'),
+            'playback_start_time': LaunchConfiguration('playback_offset')
         }],
         condition=IfCondition(LaunchConfiguration('use_music'))
     )
@@ -193,6 +200,7 @@ def generate_launch_description():
             'tempo_set': LaunchConfiguration('tempo_set'),  # Which tempo set to use (1, 2, or 3)
         }]
     )
+
     return LaunchDescription([
         simulation_arg,
         display_id_arg,
@@ -211,6 +219,7 @@ def generate_launch_description():
         control_rate_arg,
         enable_beat_sync_arg,
         play_audio_arg,
+        playback_offset_arg,
         tempo_set_arg,
         shutter_launch,
         face_launch,

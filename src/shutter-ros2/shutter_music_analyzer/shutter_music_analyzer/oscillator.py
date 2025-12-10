@@ -128,6 +128,7 @@ class MusicDrivenOscillator(HarmonicOscillator):
         self.k_tempo = k_tempo
         self.k_energy = k_energy
         self.A_0 = base_amplitude
+        self.base_omega = frequency
         
         # Current musical features
         self.current_tempo = None  # BPM
@@ -147,8 +148,16 @@ class MusicDrivenOscillator(HarmonicOscillator):
         self.current_tempo = tempo_bpm
         # Convert BPM to rad/s: (BPM / 60) * 2π
         omega_rad_per_s = (tempo_bpm / 60.0) * 2.0 * math.pi
+
+        new_base_omega = self.k_tempo * omega_rad_per_s
+        if abs(new_base_omega - self.base_omega) > 0.01:
+            self.omega = new_base_omega
+            
+        # Always update the baseline
+        self.base_omega = new_base_omega
+
         # Apply sensitivity scaling
-        self.set_frequency(self.k_tempo * omega_rad_per_s)
+        # self.set_frequency(self.k_tempo * omega_rad_per_s)
     
     def update_from_energy(self, energy):
         """
@@ -212,5 +221,5 @@ class MusicDrivenOscillator(HarmonicOscillator):
         
         # lower gain is smoother, higher is jerkier
         gain = 0.3 
-        self.omega += required_correction * gain
+        self.omega = self.base_omega + (required_correction * gain)
 
