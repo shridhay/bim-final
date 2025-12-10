@@ -37,6 +37,8 @@ class OscillatorControlNode(Node):
         base_amp = self.get_parameter('base_amplitude').value
         self.enable_beat_sync = self.get_parameter('enable_beat_sync').value
         use_phase_offsets = self.get_parameter('use_phase_offsets').value
+
+        self.music_start_detected = False
         
         # Create 4 oscillators, one for each joint
         # Phase offsets create coordinated motion: each joint starts at a different point in the sine wave
@@ -247,20 +249,53 @@ class OscillatorControlNode(Node):
     
     def beat_times_callback(self, msg):
         """Called automatically when music/beat_times topic publishes upcoming beat times"""
-        # Beat sync resets the oscillator phase to align with the music beat
-        # This makes the robot motion "in sync" with the music rhythm
+        if not self.music_start_detected and len(msg.data) > 0:
+            self.node_start_time = time.time()
+            self.music_start_detected = True
+            self.get_logger().info('Music detected! Resetting internal clock to T=0.')
+        
         self.beat_times = list(msg.data)
+        
         if len(self.beat_times) > 0 and self.enable_beat_sync:
-            # Find the next upcoming beat and sync all oscillators to it
             current_time = time.time() - self.node_start_time
-            upcoming_beats = [bt for bt in self.beat_times if bt >= current_time]
+            
+            upcoming_beats = [bt for bt in self.beat_times if bt > current_time]
+            
             if len(upcoming_beats) > 0:
                 next_beat = upcoming_beats[0]
-                # Sync ALL oscillators to the beat (adjusts their phase)
-                for osc in self.oscillators:
-                    osc.sync_to_beat(next_beat, current_time)
-                self.last_beat_time = next_beat
-                self.get_logger().debug(f'Synced all oscillators to beat at t={next_beat:.3f}s')
+                time_to_beat = next_beat - current_time
+                
+                # PREDICTIVE SYNC (Smooth Nudge)
+                if 0.1 < time_to_beat < 0.6:
+                    for osc in self.oscillators:
+                        osc.predictive_sync(next_beat, current_time)
+                        
+            # 2. HARD SYNC FALLBACK (Safety Net)
+            past_beats = [bt for bt in self.beat_times if current_time >= bt]
+            if len(past_beats) > 0:
+                most_recent_beat = past_beats[-1]
+                time_since_beat = current_time - most_recent_beat
+                
+                if time_since_beat < 0.05 and most_recent_beat != self.last_beat_time:
+                    # for osc in self.oscillators: osc.sync_to_beat(most_recent_beat, current_time)
+                    self.last_beat_time = most_recent_beat
+
+    # def beat_times_callback(self, msg):
+    #     """Called automatically when music/beat_times topic publishes upcoming beat times"""
+    #     # Beat sync resets the oscillator phase to align with the music beat
+    #     # This makes the robot motion "in sync" with the music rhythm
+    #     self.beat_times = list(msg.data)
+    #     if len(self.beat_times) > 0 and self.enable_beat_sync:
+    #         # Find the next upcoming beat and sync all oscillators to it
+    #         current_time = time.time() - self.node_start_time
+    #         upcoming_beats = [bt for bt in self.beat_times if bt >= current_time]
+    #         if len(upcoming_beats) > 0:
+    #             next_beat = upcoming_beats[0]
+    #             # Sync ALL oscillators to the beat (adjusts their phase)
+    #             for osc in self.oscillators:
+    #                 osc.sync_to_beat(next_beat, current_time)
+    #             self.last_beat_time = next_beat
+    #             self.get_logger().debug(f'Synced all oscillators to beat at t={next_beat:.3f}s')
     
     def control_loop(self):
         """

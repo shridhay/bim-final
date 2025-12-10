@@ -192,4 +192,25 @@ class MusicDrivenOscillator(HarmonicOscillator):
         time_since_beat = current_time - beat_time
         # Adjust phase so oscillator aligns with beat
         self.phi = -self.omega * time_since_beat + self.initial_offset
+    
+    def predictive_sync(self, next_beat_time, current_time, lookahead_window=0.5):
+        """
+        Smoothly adjust frequency to hit the next beat on time (Predictive Velocity).
+        Avoids the 'jerk' of a hard phase reset.
+        """
+        time_to_beat = next_beat_time - current_time
+        
+        if time_to_beat <= 0.05 or time_to_beat > lookahead_window:
+            return
+
+        current_phase_val = self.omega * self.t + self.phi
+        projected_phase = current_phase_val + (self.omega * time_to_beat)
+        
+        phase_error = math.remainder(self.initial_offset - projected_phase, 2 * math.pi)
+        
+        required_correction = phase_error / time_to_beat
+        
+        # lower gain is smoother, higher is jerkier
+        gain = 0.3 
+        self.omega += required_correction * gain
 
