@@ -126,6 +126,13 @@ def generate_launch_description():
         description='Offset in seconds to align audio with robot (negative delays robot)'
     )
 
+    tempo_bpm_arg = DeclareLaunchArgument(
+        'tempo_bpm',
+        default_value='0.0', # 0.0 means "Auto-detect"
+        description='Manual override for tempo (BPM). Set to 0.0 for auto-detection.'
+    )
+
+
     # Determine screen version based on robot version
     screen_version = PythonExpression([
         '"v2" if float("', LaunchConfiguration('robot_version'), '") >= 4.0 else "v1"'
@@ -178,7 +185,8 @@ def generate_launch_description():
             'music_file': LaunchConfiguration('music_file'),
             'publish_interval': 0.1,
             'play_audio': LaunchConfiguration('play_audio'),
-            'playback_start_time': LaunchConfiguration('playback_offset')
+            'playback_start_time': LaunchConfiguration('playback_offset'),
+            'tempo_bpm': LaunchConfiguration('tempo_bpm')
         }],
         condition=IfCondition(LaunchConfiguration('use_music'))
     )
@@ -220,6 +228,7 @@ def generate_launch_description():
         enable_beat_sync_arg,
         play_audio_arg,
         playback_offset_arg,
+        tempo_bpm_arg,
         tempo_set_arg,
         shutter_launch,
         face_launch,
