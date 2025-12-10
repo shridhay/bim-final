@@ -14,6 +14,9 @@ from scipy import signal
 from scipy.io import wavfile
 import os
 import time
+import subprocess
+import shutil
+import imageio_ffmpeg
 from std_msgs.msg import Float32MultiArray, Float32
 
 # Optional audio playback
@@ -63,7 +66,7 @@ class MusicBeatAnalyzerNode(Node):
         
         # Change tracking for logging
         self.last_energy = None
-        self.energy_change_threshold = 0.05  # Log when energy changes by this much
+        self.energy_change_threshold = 0.05
         
         # Initialize audio playback if requested
         if self.play_audio:
@@ -79,64 +82,95 @@ class MusicBeatAnalyzerNode(Node):
                 self.get_logger().warn('Audio playback disabled')
                 self.play_audio = False
 
-        # Load and analyze music upfront
         if self.analyze_song(music_file):
             self.get_logger().info('Music beat analyzer node started')
             self.node_start_time = time.time()
             self.is_playing = True
             
-            # Start audio playback if enabled
             if self.play_audio and PYGAME_AVAILABLE:
                 self.start_audio_playback(music_file)
             
             self.timer = self.create_timer(self.publish_interval, self.timer_callback)
         else:
             self.get_logger().error('Failed to analyze song. Node will not publish updates.')
-
+    
     def analyze_song(self, music_file):
-        """Load song and extract all features upfront"""
+        """Load song and extract features, with auto-repair for bad WAV formats."""
         try:
             if not os.path.exists(music_file):
                 self.get_logger().error(f'Music file not found: {music_file}')
                 return False
 
             self.get_logger().info(f'Loading music file: {music_file}')
-
-            sr, y = wavfile.read(music_file)
+            sr = None
+            y = None
             
+            needs_conversion = False
+            if not music_file.lower().endswith('.wav'):
+                self.get_logger().info('File is not a WAV. Converting to WAV for analysis...')
+                needs_conversion = True
+            else:
+                try:
+                    sr, y = wavfile.read(music_file)
+                except ValueError:
+                    self.get_logger().warn('Scipy failed to read WAV. Attempting repair...')
+                    needs_conversion = True
+
+            if needs_conversion:
+                try:
+                    import imageio_ffmpeg
+                    ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+                    
+                    # SAFE FILENAME HANDLING:
+                    # song.mp3 -> song_clean.wav
+                    # song.wav -> song_clean.wav
+                    base_name, _ = os.path.splitext(music_file)
+                    clean_file = base_name + "_clean.wav"
+                    
+                    cmd = [
+                        ffmpeg_exe, '-y', '-v', 'error', 
+                        '-i', music_file, 
+                        '-acodec', 'pcm_s16le', 
+                        '-ar', '44100', 
+                        '-bitexact', 
+                        clean_file
+                    ]
+                    
+                    self.get_logger().info(f'Converting/Repairing audio...')
+                    subprocess.run(cmd, check=True)
+                    self.get_logger().info(f'Loaded converted file: {clean_file}')
+                    
+                    sr, y = wavfile.read(clean_file)
+                    
+                except Exception as e:
+                    self.get_logger().error(f'Conversion failed: {e}')
+                    return False
+
             if len(y.shape) > 1:
                 y = np.mean(y, axis=1)
             
-            # Normalize audio to float32 range [-1, 1]
             if y.dtype != np.float32:
                 y = y.astype(np.float32) / np.max(np.abs(y))
             
             self.audio_duration = len(y) / sr
-            self.get_logger().info(f'Loaded audio: {len(y)} samples at {sr} Hz, duration: {self.audio_duration:.2f}s')
-
+            
             frequencies, times, Zxx = signal.stft(y, sr)
             S = np.abs(Zxx)
-
+            
             energy = np.sqrt(np.sum(S ** 2, axis=0))
 
             if np.max(energy) > 0:
                 energy = energy / np.max(energy)
             
-            # Scale energy to use wider range (0.0 to 1.0) for more noticeable changes
-            # If your energy is currently 0.07-0.15, this will map it to ~0.0-1.0
             energy_min = np.min(energy)
             energy_max = np.max(energy)
             if energy_max > energy_min:
-                energy = (energy - energy_min) / (energy_max - energy_min)  # Normalize to 0-1
+                energy = (energy - energy_min) / (energy_max - energy_min) 
             else:
-                energy = np.zeros_like(energy)  # All same value, set to 0
-            
-            self.get_logger().info(f'Energy range: {energy_min:.3f} - {energy_max:.3f} (scaled to 0.0 - 1.0)')
+                energy = np.zeros_like(energy) 
 
             self.energy = energy
             self.energy_times = times
-
-            # Detect beats and onsets using onset detection
             self.beat_times, self.onset_times = self.detect_beats_and_onsets(y, sr)
 
             if self.tempo_bpm > 0:
@@ -149,10 +183,7 @@ class MusicBeatAnalyzerNode(Node):
             self.publish_all_features()
 
             self.get_logger().info(f'Tempo: {self.tempo:.1f} BPM')
-            self.get_logger().info(f'Found {len(self.beat_times)} beats')
-            self.get_logger().info(f'Found {len(self.onset_times)} onsets')
-            self.get_logger().info(f'Energy samples: {len(self.energy)}')
-
+            
             return True
 
         except Exception as e:
@@ -203,6 +234,34 @@ class MusicBeatAnalyzerNode(Node):
         if len(valid_autocorr) > 0:
             peak_idx = np.argmax(valid_autocorr)
             beat_period = valid_lags[peak_idx]
+
+            peak_strength = valid_autocorr[peak_idx]
+
+            bpm_est = 60.0 / beat_period
+            self.get_logger().info(f'Raw Autocorr Candidate: {bpm_est:.1f} BPM (Strength: {peak_strength:.2f})')
+            # 2. HARMONIC CHECK (The Fix for Mambo No. 5)
+            # Check if there is a strong peak at HALF the period (Double the Tempo)
+            # This handles cases where the algorithm picks 87 BPM instead of 174 BPM
+            if bpm_est < 100:
+                half_period = beat_period / 2.0
+                if half_period >= 0.3:
+                    idx_half = np.argmin(np.abs(valid_lags - half_period))
+                    strength_half = valid_autocorr[idx_half]
+                    
+                    if strength_half > 0.4 * peak_strength:
+                        self.get_logger().info(f'BPM Correction (Slow->Fast): Switching to {60/half_period:.1f} BPM')
+                        beat_period = half_period
+            elif bpm_est > 120:
+                double_period = beat_period * 2.0
+                if double_period <= 1.0:
+                    idx_double = np.argmin(np.abs(valid_lags - double_period))
+                    strength_double = valid_autocorr[idx_double]
+                    threshold = 0.95 if peak_strength > 0.7 else 0.75
+                    
+                    if strength_double > threshold * peak_strength:
+                        self.get_logger().info(f'Correction (Fast->Slow): {60/beat_period:.1f} -> {60/double_period:.1f} BPM')
+                        beat_period = double_period
+
         else:
             onset_intervals = np.diff(times[signal.find_peaks(onset_strength, height=0.05)[0]])
             if len(onset_intervals) > 10:
@@ -246,7 +305,7 @@ class MusicBeatAnalyzerNode(Node):
             beat_times.append(onset_times[0])
             for ot in onset_times[1:]:
                 # uses (1 - number)% variation for clustering
-                if ot - beat_times[-1] >= min_beat_interval * 0.70:
+                if ot - beat_times[-1] >= min_beat_interval * 0.85:
                     beat_times.append(ot)
         
         beat_times = np.array(beat_times)

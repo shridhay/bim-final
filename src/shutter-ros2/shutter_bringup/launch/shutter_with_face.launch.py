@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, TimerAction
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
@@ -193,7 +193,6 @@ def generate_launch_description():
             'tempo_set': LaunchConfiguration('tempo_set'),  # Which tempo set to use (1, 2, or 3)
         }]
     )
-
     return LaunchDescription([
         simulation_arg,
         display_id_arg,
@@ -215,6 +214,9 @@ def generate_launch_description():
         tempo_set_arg,
         shutter_launch,
         face_launch,
-        music_analyzer_node,
-        oscillator_node,
+        oscillator_node, 
+        TimerAction(
+            period=3.0,
+            actions=[music_analyzer_node]
+        )
     ])

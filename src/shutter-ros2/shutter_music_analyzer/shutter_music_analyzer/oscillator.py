@@ -124,6 +124,7 @@ class MusicDrivenOscillator(HarmonicOscillator):
             base_amplitude: Base amplitude A_0
         """
         super().__init__(amplitude, frequency, phase)
+        self.initial_offset = phase
         self.k_tempo = k_tempo
         self.k_energy = k_energy
         self.A_0 = base_amplitude
@@ -190,5 +191,5 @@ class MusicDrivenOscillator(HarmonicOscillator):
         # But we want to account for current time offset
         time_since_beat = current_time - beat_time
         # Adjust phase so oscillator aligns with beat
-        self.phi = -self.omega * time_since_beat
+        self.phi = -self.omega * time_since_beat + self.initial_offset
 

@@ -15,7 +15,13 @@ setup(
         ('share/' + package_name, ['package.xml']),
         ('share/shutter_music_analyzer/launch', glob('launch/*')),
     ],
-    install_requires=['setuptools', 'librosa', 'numpy'],
+    install_requires=[
+        'setuptools', 
+        # 'librosa', 
+        'numpy', 
+        'scipy', 
+        'imageio-ffmpeg',  
+        'pygame'],
     zip_safe=True,
     maintainer='caleb.nieh@yale.edu',
     maintainer_email='calebnieh@gmail.com',
@@ -29,6 +35,7 @@ setup(
     entry_points={
         'console_scripts': [
             'music_analyzer = shutter_music_analyzer.music_analyzer_node:main',
+            # 'music_analyzer_node = shutter_music_analyzer.music_analyzer_node:main',
             'oscillator_control = shutter_music_analyzer.oscillator_node:main'
         ],
     },

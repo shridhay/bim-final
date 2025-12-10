@@ -29,7 +29,7 @@ class OscillatorControlNode(Node):
         self.declare_parameter('control_rate', 50.0)  # Hz
         self.declare_parameter('enable_beat_sync', True)  # Sync phase to beats
         self.declare_parameter('use_phase_offsets', True)  # Use phase offsets for coordinated motion
-        self.declare_parameter('use_music', False)  # If True, use music topics; if False, use hardcoded patterns
+        self.declare_parameter('use_music', True)  # If True, use music topics; if False, use hardcoded patterns
         self.declare_parameter('tempo_set', 1)  # Which tempo set to use (1, 2, or 3)
         
         k_tempo = self.get_parameter('k_tempo').value
